@@ -12,3 +12,5 @@ yarn-error.log*
 .idea
 
 .env
+
+.test-issues

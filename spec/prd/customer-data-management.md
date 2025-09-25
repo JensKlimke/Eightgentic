@@ -1,6 +1,6 @@
 # Customer Data Management System
 
-Version 0.1.4
+Version 0.1.7
 
 ## Overview
 Our small business needs a simple system to register new customers and track their current status. We currently manage customer information manually through spreadsheets, which is becoming inefficient as we grow. We need a basic digital solution to streamline customer data management.
