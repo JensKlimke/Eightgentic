@@ -17,6 +17,7 @@ jobs:
       contents: read
       issues: write
       pull-requests: write
+      repository-projects: write
 
     steps:
       - name: Checkout repository
@@ -69,23 +70,31 @@ jobs:
           script: |
             const fs = require('fs');
             const path = './generated-issues-summary.json';
-            
+
             if (fs.existsSync(path)) {
               const summary = JSON.parse(fs.readFileSync(path, 'utf8'));
               const comment = `🤖 **PRD Processing Complete**
-            
+
               Generated ${summary.totalIssues} issues from PRD analysis:
               - 🔧 Technical Features: ${summary.technical}
-              - 📋 Non-Technical Features: ${summary.nonTechnical}  
+              - 📋 Non-Technical Features: ${summary.nonTechnical}
               - 🚀 Enabler Features: ${summary.enablers}
               - ❓ Open Questions: ${summary.openQuestions}
-            
+
               All issues have been created and are ready for review.`;
-            
-              github.rest.repos.createCommitComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                commit_sha: context.sha,
-                body: comment
-              });
+
+              try {
+                await github.rest.repos.createCommitComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  commit_sha: context.sha,
+                  body: comment
+                });
+                console.log('✅ Commit comment added successfully');
+              } catch (error) {
+                console.log('⚠️ Could not add commit comment (insufficient permissions):', error.message);
+                console.log('📊 Summary:', JSON.stringify(summary, null, 2));
+              }
+            } else {
+              console.log('⚠️ No summary file found - issues may not have been created successfully');
             }
