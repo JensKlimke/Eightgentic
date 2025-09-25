@@ -1,6 +1,6 @@
 # Workflow
 
-In the following terms of agile software engineering are used to describe the agentic systems to solve specific problems. However, there are also humans involved in the workflow stated as "God". God means that these actions are out of the power of the agentic system and are beyond all doubt. 
+In the following, terms of agile software engineering are used to describe the agentic systems to solve specific problems. However, there are also humans involved in the workflow stated as "God". God means that these actions are out of the power of the agentic system and are beyond all doubt. 
 
 ## Customer Product Requirements Document
 
@@ -17,6 +17,7 @@ The customer product requirements document (C-PRD) is a document, which describe
 
 #### Creating and updating issues
 
-- Define the category of the issue (Technical Features, Non-technical Features, Enabler Features, Blockers)
+- Define the category of the issue (Technical Features, Non-technical Features, Enabler Features)
 - Create labels for the issue (TODO: label set)
 - Mark as blocked by, if needed
+- 

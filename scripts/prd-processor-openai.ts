@@ -12,6 +12,7 @@ interface AnalyzedFeature {
   estimatedEffort: string;
   acceptanceCriteria: string[];
   dependencies: string[];
+  blockedFeatures: string[];
   tags: string[];
 }
 
@@ -112,18 +113,24 @@ Please provide your analysis in JSON format matching the expected structure for 
     }
   }
 
-  async createFeatureIssue(feature: AnalyzedFeature, prdPath: string): Promise<number> {
+  async createFeatureIssue(feature: AnalyzedFeature, prdPath: string, allFeatures: AnalyzedFeature[] = []): Promise<number> {
     const { issueTemplates } = await this.loadSystemPrompts();
 
     const templateKey = feature.type === 'non-technical' ? 'nonTechnical' : feature.type;
     const template = issueTemplates[templateKey];
+
+    // Add blocked features section to the issue body
+    let blockedFeaturesSection = '';
+    if (feature.blockedFeatures && feature.blockedFeatures.length > 0) {
+      blockedFeaturesSection = `\n\n### 🚫 Blocked Features\nThis feature blocks the following features:\n${feature.blockedFeatures.map(f => `- ${f}`).join('\n')}\n`;
+    }
 
     const issueBody = template
       .replace('{{DESCRIPTION}}', feature.description)
       .replace('{{ESTIMATED_EFFORT}}', feature.estimatedEffort)
       .replace('{{ACCEPTANCE_CRITERIA}}', feature.acceptanceCriteria.map(ac => `- [ ] ${ac}`).join('\n'))
       .replace('{{DEPENDENCIES}}', feature.dependencies.join(', ') || 'None')
-      .replace('{{PRD_PATH}}', prdPath);
+      .replace('{{PRD_PATH}}', prdPath) + blockedFeaturesSection;
 
     const labels = [
       'prd-generated',
@@ -165,7 +172,7 @@ Please provide your analysis in JSON format matching the expected structure for 
     // Create feature issues
     for (const feature of analysis.features) {
       console.log(`Creating feature issue: ${feature.title} (${feature.type})`);
-      const issueNumber = await this.createFeatureIssue(feature, prdFilePath);
+      const issueNumber = await this.createFeatureIssue(feature, prdFilePath, analysis.features);
       createdIssues.features.push(issueNumber);
     }
 
