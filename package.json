@@ -1,13 +1,19 @@
 {
   "name": "Eightgent",
   "version": "1.0.0",
-  "description": "",
+  "description": "Automated PRD to GitHub Issues processor",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "process-prd": "ts-node scripts/prd-processor.ts"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.24.0",
+    "@octokit/rest": "^20.0.0"
+  },
   "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.0",
     "typescript": "^5.5.3"
   },
   "private": true

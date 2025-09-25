@@ -1,0 +1,86 @@
+# .github/workflows/prd-to-issues.yml
+name: PRD to GitHub Issues
+
+on:
+  push:
+    paths:
+      - 'spec/prd/**/*.md'
+      - 'spec/prd/**/*.txt'
+    branches:
+      - main
+      - develop
+
+jobs:
+  generate-issues:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # Fetch current and previous commit to detect changes
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          npm install @octokit/rest @anthropic-ai/sdk typescript ts-node
+
+      - name: Install TypeScript globally
+        run: npm install -g typescript ts-node
+
+      - name: Detect changed PRD files
+        id: changed-files
+        run: |
+          # Get list of changed PRD files
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep "^spec/prd/" | grep -E "\.(md|txt)$" || true)
+          echo "changed_files<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGED_FILES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Generate issues from PRD
+        if: steps.changed-files.outputs.changed_files != ''
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          # Process each changed PRD file
+          echo "${{ steps.changed-files.outputs.changed_files }}" | while read -r file; do
+            if [ -n "$file" ]; then
+              echo "Processing PRD file: $file"
+              ts-node scripts/prd-processor.ts "$file"
+            fi
+          done
+
+      - name: Comment on commit
+        if: steps.changed-files.outputs.changed_files != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = './generated-issues-summary.json';
+            
+            if (fs.existsSync(path)) {
+              const summary = JSON.parse(fs.readFileSync(path, 'utf8'));
+              const comment = `🤖 **PRD Processing Complete**
+            
+              Generated ${summary.totalIssues} issues from PRD analysis:
+              - 🔧 Technical Features: ${summary.technical}
+              - 📋 Non-Technical Features: ${summary.nonTechnical}  
+              - 🚀 Enabler Features: ${summary.enablers}
+              - ❓ Open Questions: ${summary.openQuestions}
+            
+              All issues have been created and are ready for review.`;
+            
+              github.rest.repos.createCommitComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                commit_sha: context.sha,
+                body: comment
+              });
+            }
