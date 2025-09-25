@@ -79,7 +79,6 @@ jobs:
               - 🔧 Technical Features: ${summary.technical}
               - 📋 Non-Technical Features: ${summary.nonTechnical}
               - 🚀 Enabler Features: ${summary.enablers}
-              - ❓ Open Questions: ${summary.openQuestions}
 
               All issues have been created and are ready for review.`;
 

@@ -1,4 +1,4 @@
-## ❓ Open Question - Needs Clarification
+## ❓ Clarification Blockers
 
 ⚠️ **BLOCKER**: This question must be resolved before related features can proceed.
 

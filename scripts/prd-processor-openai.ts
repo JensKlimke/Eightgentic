@@ -15,17 +15,8 @@ interface AnalyzedFeature {
   tags: string[];
 }
 
-interface OpenQuestion {
-  title: string;
-  description: string;
-  impact: string;
-  blockedFeatures: string[];
-  stakeholders: string[];
-}
-
 interface PRDAnalysis {
   features: AnalyzedFeature[];
-  openQuestions: OpenQuestion[];
   metadata: {
     prdTitle: string;
     summary: string;
@@ -62,8 +53,7 @@ class ProductManagerAgent {
     const issueTemplates = {
       technical: fs.readFileSync('templates/technical-feature-template.md', 'utf8'),
       nonTechnical: fs.readFileSync('templates/non-technical-feature-template.md', 'utf8'),
-      enabler: fs.readFileSync('templates/enabler-feature-template.md', 'utf8'),
-      openQuestion: fs.readFileSync('templates/open-question-template.md', 'utf8')
+      enabler: fs.readFileSync('templates/enabler-feature-template.md', 'utf8')
     };
 
     return { analysisPrompt, issueTemplates };
@@ -110,7 +100,6 @@ Please provide your analysis in JSON format matching the expected structure for 
 
       return {
         features: analysis.features || [],
-        openQuestions: analysis.openQuestions || [],
         metadata: {
           prdTitle: analysis.metadata?.prdTitle || path.basename(prdPath),
           summary: analysis.metadata?.summary || 'PRD analysis generated automatically',
@@ -154,26 +143,6 @@ Please provide your analysis in JSON format matching the expected structure for 
     return response.data.number;
   }
 
-  async createOpenQuestionIssue(question: OpenQuestion, prdPath: string): Promise<number> {
-    const { issueTemplates } = await this.loadSystemPrompts();
-
-    const issueBody = issueTemplates.openQuestion
-      .replace('{{DESCRIPTION}}', question.description)
-      .replace('{{IMPACT}}', question.impact)
-      .replace('{{BLOCKED_FEATURES}}', question.blockedFeatures.join(', ') || 'None specified')
-      .replace('{{STAKEHOLDERS}}', question.stakeholders.join(', ') || 'To be determined')
-      .replace('{{PRD_PATH}}', prdPath);
-
-    const response = await this.octokit.rest.issues.create({
-      owner: this.repoOwner,
-      repo: this.repoName,
-      title: `[QUESTION] ${question.title}`,
-      body: issueBody,
-      labels: ['prd-generated', 'type:open-question', 'needs-clarification', 'blocker']
-    });
-
-    return response.data.number;
-  }
 
   async processPRD(prdFilePath: string): Promise<void> {
     console.log(`Processing PRD file: ${prdFilePath}`);
@@ -187,19 +156,11 @@ Please provide your analysis in JSON format matching the expected structure for 
     console.log('Analyzing PRD with OpenAI GPT-4...');
     const analysis = await this.analyzePRD(prdContent, prdFilePath);
 
-    console.log(`Found ${analysis.features.length} features and ${analysis.openQuestions.length} open questions`);
+    console.log(`Found ${analysis.features.length} features`);
 
     const createdIssues = {
-      features: [] as number[],
-      openQuestions: [] as number[]
+      features: [] as number[]
     };
-
-    // Create issues for open questions first (as they may block features)
-    for (const question of analysis.openQuestions) {
-      console.log(`Creating open question issue: ${question.title}`);
-      const issueNumber = await this.createOpenQuestionIssue(question, prdFilePath);
-      createdIssues.openQuestions.push(issueNumber);
-    }
 
     // Create feature issues
     for (const feature of analysis.features) {
@@ -210,11 +171,10 @@ Please provide your analysis in JSON format matching the expected structure for 
 
     // Create summary for workflow
     const summary = {
-      totalIssues: createdIssues.features.length + createdIssues.openQuestions.length,
+      totalIssues: createdIssues.features.length,
       technical: analysis.features.filter(f => f.type === 'technical').length,
       nonTechnical: analysis.features.filter(f => f.type === 'non-technical').length,
       enablers: analysis.features.filter(f => f.type === 'enabler').length,
-      openQuestions: createdIssues.openQuestions.length,
       prdPath: prdFilePath,
       createdIssues
     };
