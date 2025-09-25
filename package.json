@@ -5,11 +5,13 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "process-prd": "ts-node scripts/prd-processor.ts"
+    "process-prd": "ts-node scripts/prd-processor.ts",
+    "process-prd-openai": "ts-node scripts/prd-processor-openai.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",
-    "@octokit/rest": "^20.0.0"
+    "@octokit/rest": "^20.0.0",
+    "openai": "^4.63.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
