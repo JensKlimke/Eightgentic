@@ -58,7 +58,7 @@ jobs:
           echo "${{ steps.changed-files.outputs.changed_files }}" | while read -r file; do
             if [ -n "$file" ]; then
               echo "Processing PRD file: $file"
-              ts-node scripts/prd-processor-openapi.ts "$file"
+              ts-node scripts/prd-processor-openai.ts "$file"
             fi
           done
 
