@@ -260,13 +260,14 @@ export class FileSystemIssueService implements IIssueService {
 
     this.saveIssue(newIssue, issue.body, comments);
 
-    logger.info(`✅ Created issue #${newIssue.number}`, {
+    logger.info(`✅ Created Issue #${newIssue.number}: "${newIssue.title}" [${newIssue.labels.filter(l => l !== 'prd-generated').join(', ')}]`, {
       action: 'issue_created',
       issueNumber: newIssue.number,
       title: newIssue.title,
       labels: newIssue.labels,
       filePath: this.getIssuePath(newIssue.number),
-      bodyLength: issue.body.length
+      bodyLength: issue.body.length,
+      contentPreview: issue.body.substring(0, 150) + '...'
     });
 
     log.issueCreated(newIssue.number, newIssue.title, newIssue.labels, 'Created from PRD processing', issue.body);
@@ -320,11 +321,20 @@ export class FileSystemIssueService implements IIssueService {
     // Save issue metadata and body if updated
     this.saveIssue(issue, updates.body);
 
-    logger.info(`✅ Updated issue #${issueNumber}`, {
+    logger.info(`✅ Updated Issue #${issueNumber}: "${issue.title}" - ${changes.length} changes applied`, {
       action: 'issue_updated',
       issueNumber,
       changes,
       title: issue.title
+    });
+
+    // Log specific changes at info level
+    changes.forEach(change => {
+      if (!change.includes('body: updated')) {
+        logger.info(`   🔄 ${change}`);
+      } else {
+        logger.info(`   📝 ${change}`);
+      }
     });
 
     log.issueUpdated(issueNumber, issue.title, changes, 'Updated from PRD processing');

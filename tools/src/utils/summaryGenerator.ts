@@ -103,18 +103,27 @@ export class SummaryGenerator {
         const entry = JSON.parse(line);
         logEntries.push(entry);
       } catch (error) {
-        // Skip malformed log lines
+        // Skip malformed log lines - these might be multi-line entries
+        logger.debug('Skipping malformed log line:', { line: line.substring(0, 100) + '...' });
         continue;
       }
     }
+
+    logger.debug(`Parsed ${logEntries.length} log entries from ${logLines.length} lines`);
 
     // Find the most recent PRD processing session
     const prdStartEntries = logEntries.filter(
       entry => entry.action === 'prd_processing_start'
     );
 
+    logger.debug(`Found ${prdStartEntries.length} PRD processing start entries`);
+
+    // Debug: Show what actions we do have
+    const actions = [...new Set(logEntries.map(e => e.action).filter(Boolean))];
+    logger.debug('Available actions in logs:', actions.slice(0, 20));
+
     if (prdStartEntries.length === 0) {
-      throw new Error('No PRD processing sessions found in logs');
+      throw new Error(`No PRD processing sessions found in logs. Available actions: [${actions.slice(0, 10).join(', ')}]`);
     }
 
     // Get the most recent session

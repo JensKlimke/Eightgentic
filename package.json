@@ -9,7 +9,7 @@
     "build:generated": "tsc",
     "clean": "rm -rf dist && cd tools && npm run clean",
     "dev:tools": "cd tools && npm run dev",
-    "test-local": "cd tools && npm run test-local -- --verbose",
+    "test-local": "cd tools && npm run test-local --",
     "process-prd": "cd tools && pnpm run process-prd --",
     "process-prd-openai": "cd tools && pnpm run process-prd-openai --",
     "process-prd-smart": "cd tools && pnpm run process-prd-smart --"

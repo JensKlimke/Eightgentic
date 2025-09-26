@@ -13,12 +13,11 @@ const LOG_LEVELS = {
 // Create logs directory path
 const logsDir = path.join(__dirname, '../../../logs');
 
-// Custom format for file logs with detailed context
+// Custom format for file logs with detailed context (single-line JSON)
 const fileFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
   winston.format.errors({ stack: true }),
-  winston.format.json(),
-  winston.format.prettyPrint({ depth: 3, colorize: false })
+  winston.format.json({ space: 0 }) // Explicitly no spacing for single-line
 );
 
 // Custom format for console logs with emoji indicators

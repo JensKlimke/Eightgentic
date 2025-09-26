@@ -144,6 +144,9 @@ export class SmartPRDProcessor {
 
     log.aiInteraction(prompt, content, 'gpt-4o', tokens);
 
+    // Log AI interaction summary at info level
+    logger.info(`🤖 AI Analysis: Used ${tokens} tokens, generated ${content.length} chars response for ${prompt.substring(prompt.indexOf('#') + 1, prompt.indexOf('\n')).trim()}`);
+
     return this.parseAIResponse(content);
   }
 
@@ -221,7 +224,7 @@ ${existingIssues.map(issue => `
       summary: result.summary || 'No summary provided'
     };
 
-    logger.info('Stage 1: Relevant issues identification completed', {
+    logger.info(`🎯 Stage 1 Complete: ${stage1Result.relevantIssues.length} relevant issues identified from ${stage1Result.relevantIssues.length + stage1Result.unrelatedIssues.length} total`, {
       action: 'stage1_complete',
       relevantIssuesCount: stage1Result.relevantIssues.length,
       unrelatedIssuesCount: stage1Result.unrelatedIssues.length,
@@ -233,6 +236,15 @@ ${existingIssues.map(issue => `
       unrelatedIssues: stage1Result.unrelatedIssues,
       summary: stage1Result.summary
     });
+
+    // Log each relevant issue with reasoning at info level
+    stage1Result.relevantIssues.forEach(issue => {
+      logger.info(`🔍 Issue #${issue.issueNumber} marked as ${issue.relevance.toUpperCase()} relevance: ${issue.reason}`);
+    });
+
+    if (stage1Result.unrelatedIssues.length > 0) {
+      logger.info(`📋 ${stage1Result.unrelatedIssues.length} issues marked as unrelated: [${stage1Result.unrelatedIssues.join(', ')}]`);
+    }
 
     return stage1Result;
   }
@@ -279,12 +291,21 @@ ${prdContent}
       summary: result.summary || 'No summary provided'
     };
 
-    logger.info('Stage 2: Issue updates planning completed', {
+    logger.info(`🛠️ Stage 2 Complete: ${stage2Result.updatePlans.length} updates planned, ${stage2Result.noUpdateNeeded.length} issues need no changes`, {
       action: 'stage2_complete',
       updatePlansCount: stage2Result.updatePlans.length,
       noUpdateNeededCount: stage2Result.noUpdateNeeded.length,
       summary: stage2Result.summary
     });
+
+    // Log each update plan with reasoning at info level
+    stage2Result.updatePlans.forEach(plan => {
+      logger.info(`📝 Issue #${plan.issueNumber} planned for ${plan.changeType} update: ${plan.updateSummary}`);
+    });
+
+    if (stage2Result.noUpdateNeeded.length > 0) {
+      logger.info(`✅ Issues requiring no updates: [${stage2Result.noUpdateNeeded.join(', ')}]`);
+    }
 
     return stage2Result;
   }
@@ -350,14 +371,16 @@ ${updatePlans.map(plan => `- #${plan.issueNumber}: ${plan.updateSummary}`).join(
       labels: ['prd-generated']
     });
 
-    logger.info(`📊 Found ${existingIssues.length} existing issues`, {
+    logger.info(`📊 Found ${existingIssues.length} existing PRD-generated issues: [${existingIssues.map(i => `#${i.number}`).join(', ')}]`, {
       action: 'existing_issues_found',
       count: existingIssues.length,
-      issueNumbers: existingIssues.map(i => i.number)
+      issueNumbers: existingIssues.map(i => i.number),
+      issueTitles: existingIssues.map(i => ({ number: i.number, title: i.title }))
     });
 
     if (forceCreate || existingIssues.length === 0) {
-      logger.info('🆕 Creating new issues (no existing issues or force create mode)', {
+      const reason = forceCreate ? 'Force create mode enabled' : 'No existing PRD-generated issues found';
+      logger.info(`🆕 Creating fresh issues: ${reason}`, {
         action: 'creating_new_issues',
         reason: forceCreate ? 'force_create_mode' : 'no_existing_issues',
         forceCreate,
@@ -373,12 +396,24 @@ ${updatePlans.map(plan => `- #${plan.issueNumber}: ${plan.updateSummary}`).join(
       existingIssuesCount: existingIssues.length
     });
     const prdDiff = await this.getPRDDiff(prdContent, existingIssues);
-    logger.info(`📋 PRD changes analysis: ${prdDiff.split('\n').length} lines of diff`, {
+    const diffLines = prdDiff.split('\n').length;
+    const significantChanges = prdDiff.includes('+ ') || prdDiff.includes('- ');
+    logger.info(`📋 PRD Analysis: ${diffLines} lines of diff detected (${significantChanges ? 'contains significant changes' : 'minimal changes'})`, {
       action: 'prd_diff_complete',
-      diffLines: prdDiff.split('\n').length,
+      diffLines,
       diffLength: prdDiff.length,
+      hasSignificantChanges: significantChanges,
       diffPreview: prdDiff.substring(0, 300) + '...'
     });
+
+    // Log key changes at info level
+    const changeLines = prdDiff.split('\n').filter(line => line.startsWith('+ ') || line.startsWith('- ')).slice(0, 5);
+    if (changeLines.length > 0) {
+      logger.info(`🔍 Key changes detected:`);
+      changeLines.forEach(line => {
+        logger.info(`   ${line}`);
+      });
+    }
 
     // Stage 1: Identify relevant issues
     logger.info('🔍 Stage 1: Identifying relevant issues...');
@@ -422,7 +457,7 @@ ${updatePlans.map(plan => `- #${plan.issueNumber}: ${plan.updateSummary}`).join(
     await this.executeUpdates(stage2Result.updatePlans, prdContent, prdFilePath);
 
     // Create new issues
-    console.log('➕ Creating new issues...');
+    logger.info('➕ Creating new issues for missing features identified in Stage 3...');
     await this.createNewIssues(stage3Result.features, prdFilePath, prdContent);
 
     // Generate summary
@@ -434,16 +469,21 @@ ${updatePlans.map(plan => `- #${plan.issueNumber}: ${plan.updateSummary}`).join(
     };
 
     fs.writeFileSync('smart-update-summary.json', JSON.stringify(summary, null, 2));
-    console.log('✅ Smart PRD processing completed successfully');
-    console.log(`   Updated: ${summary.updated}, Created: ${summary.created}, Unchanged: ${summary.unchanged}`);
+    logger.info(`✅ Smart PRD Processing Complete: ${summary.updated} updated, ${summary.created} created, ${summary.unchanged} unchanged issues`, {
+      action: 'prd_processing_complete',
+      summary,
+      totalIssuesProcessed: summary.updated + summary.created + summary.unchanged
+    });
   }
 
   private async executeUpdates(updatePlans: Stage2Result['updatePlans'], prdContent: string, prdPath: string): Promise<void> {
     for (const plan of updatePlans) {
-      console.log(`  Updating issue #${plan.issueNumber}: ${plan.updateSummary}`);
+      logger.info(`🔄 Executing update for Issue #${plan.issueNumber}: ${plan.updateSummary}`);
 
       if (Object.keys(plan.updates).length > 0) {
         await this.issueService.updateIssue(plan.issueNumber, plan.updates);
+      } else {
+        logger.info(`   ℹ️ No changes needed for Issue #${plan.issueNumber}`);
       }
 
       if (plan.comment) {
