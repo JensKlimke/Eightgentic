@@ -18,7 +18,8 @@
     "@octokit/rest": "^20.0.0",
     "dotenv": "^17.2.2",
     "js-yaml": "^4.1.0",
-    "openai": "^4.63.0"
+    "openai": "^4.63.0",
+    "winston": "^3.17.0"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.5",

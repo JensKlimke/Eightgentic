@@ -26,6 +26,8 @@ pnpm-debug.log*
 .test-issues
 .test-*
 
+logs
+
 # Generated code (optional - uncomment if you don't want to commit generated code)
 # /src/**
 # !/src/index.ts

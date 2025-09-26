@@ -5,8 +5,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { IIssueService, Issue, IssueData } from '../services/interfaces/IIssueService';
+import { IIssueService, Issue } from '../services/interfaces/IIssueService';
 import { IssueServiceFactory } from '../services/IssueServiceFactory';
+import { log, createModuleLogger } from '../utils/logger';
+
+// Create module-specific logger
+const logger = createModuleLogger('SmartPRDProcessor');
 
 const execAsync = promisify(exec);
 
@@ -75,19 +79,48 @@ export class SmartPRDProcessor {
     if (existingIssues.length > 0 && this.issueService.getPRDDiff) {
       const firstIssue = existingIssues[0];
       try {
-        return await this.issueService.getPRDDiff(firstIssue.number, prdContent);
+        const diff = await this.issueService.getPRDDiff(firstIssue.number, prdContent);
+        logger.debug('PRD diff generated successfully', {
+          action: 'prd_diff_generation',
+          issueNumber: firstIssue.number,
+          diffLength: diff.length,
+          diffPreview: diff.substring(0, 200) + '...'
+        });
+        return diff;
       } catch (error) {
-        console.warn('Could not get PRD diff from stored version:', error);
+        logger.warn('Could not get PRD diff from stored version:', error);
       }
     }
     return 'No stored PRD version available for comparison';
   }
 
   async loadPrompt(promptFile: string): Promise<string> {
-    return fs.readFileSync(path.join(__dirname, '../../prompts', promptFile), 'utf8');
+    const promptPath = path.join(__dirname, '../../prompts', promptFile);
+    logger.debug('Loading prompt file', {
+      action: 'prompt_loading',
+      promptFile,
+      promptPath
+    });
+    const content = fs.readFileSync(promptPath, 'utf8');
+    logger.debug('Prompt loaded successfully', {
+      action: 'prompt_loaded',
+      promptFile,
+      contentLength: content.length,
+      contentPreview: content.substring(0, 150) + '...'
+    });
+    return content;
   }
 
   async analyzeWithAI(prompt: string, userContent: string): Promise<any> {
+    logger.debug('Starting AI analysis', {
+      action: 'ai_analysis_start',
+      model: 'gpt-4o',
+      promptLength: prompt.length,
+      userContentLength: userContent.length,
+      promptPreview: prompt.substring(0, 100) + '...',
+      userContentPreview: userContent.substring(0, 200) + '...'
+    });
+
     const response = await this.openai.chat.completions.create({
       model: 'gpt-4o',
       max_tokens: 4000,
@@ -97,17 +130,56 @@ export class SmartPRDProcessor {
         { role: 'user', content: userContent }
       ]
     });
+
     const content = response.choices[0]?.message?.content || '';
+    const tokens = response.usage?.total_tokens || 0;
+
+    logger.debug('AI analysis completed', {
+      action: 'ai_analysis_complete',
+      model: 'gpt-4o',
+      responseLength: content.length,
+      tokensUsed: tokens,
+      responsePreview: content.substring(0, 200) + '...'
+    });
+
+    log.aiInteraction(prompt, content, 'gpt-4o', tokens);
+
     return this.parseAIResponse(content);
   }
 
   private parseAIResponse(content: string): any {
+    logger.debug('Parsing AI response', {
+      action: 'ai_response_parsing',
+      contentLength: content.length,
+      contentPreview: content.substring(0, 300) + '...'
+    });
+
     const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) ||
                       content.match(/({[\s\S]*})/);
     if (!jsonMatch) {
+      logger.error('No valid JSON found in AI response', {
+        action: 'ai_response_parse_error',
+        content: content.substring(0, 500) + '...'
+      });
       throw new Error('No valid JSON found in AI response');
     }
-    return JSON.parse(jsonMatch[1]);
+
+    try {
+      const parsed = JSON.parse(jsonMatch[1]);
+      logger.debug('AI response parsed successfully', {
+        action: 'ai_response_parsed',
+        jsonLength: jsonMatch[1].length,
+        parsedKeys: Object.keys(parsed)
+      });
+      return parsed;
+    } catch (error) {
+      logger.error('Failed to parse JSON from AI response', {
+        action: 'json_parse_error',
+        error: error,
+        jsonContent: jsonMatch[1].substring(0, 500) + '...'
+      });
+      throw error;
+    }
   }
 
   // Stage 1: Identify relevant issues
@@ -116,6 +188,14 @@ export class SmartPRDProcessor {
     prdDiff: string,
     existingIssues: Issue[]
   ): Promise<Stage1Result> {
+    logger.info('Stage 1: Starting relevant issues identification', {
+      action: 'stage1_start',
+      prdContentLength: prdContent.length,
+      prdDiffLength: prdDiff.length,
+      existingIssuesCount: existingIssues.length,
+      existingIssueNumbers: existingIssues.map(i => i.number)
+    });
+
     const prompt = await this.loadPrompt('prd-update-stage1.md');
 
     const userContent = `
@@ -132,7 +212,29 @@ ${existingIssues.map(issue => `
 `).join('\n')}
 `;
 
-    return await this.analyzeWithAI(prompt, userContent);
+    const result = await this.analyzeWithAI(prompt, userContent) as any;
+
+    // Handle potential typos in AI response (e.g., 'unrealtedIssues' instead of 'unrelatedIssues')
+    const stage1Result: Stage1Result = {
+      relevantIssues: result.relevantIssues || [],
+      unrelatedIssues: result.unrelatedIssues || result.unrealtedIssues || [],
+      summary: result.summary || 'No summary provided'
+    };
+
+    logger.info('Stage 1: Relevant issues identification completed', {
+      action: 'stage1_complete',
+      relevantIssuesCount: stage1Result.relevantIssues.length,
+      unrelatedIssuesCount: stage1Result.unrelatedIssues.length,
+      relevantIssues: stage1Result.relevantIssues.map(i => ({
+        issueNumber: i.issueNumber,
+        relevance: i.relevance,
+        reason: i.reason
+      })),
+      unrelatedIssues: stage1Result.unrelatedIssues,
+      summary: stage1Result.summary
+    });
+
+    return stage1Result;
   }
 
   // Stage 2: Plan updates for relevant issues
@@ -168,7 +270,23 @@ ${prdDiff}
 ${prdContent}
 `;
 
-    return await this.analyzeWithAI(prompt, userContent);
+    const result = await this.analyzeWithAI(prompt, userContent) as any;
+
+    // Ensure Stage2Result has required properties with defaults
+    const stage2Result: Stage2Result = {
+      updatePlans: result.updatePlans || [],
+      noUpdateNeeded: result.noUpdateNeeded || [],
+      summary: result.summary || 'No summary provided'
+    };
+
+    logger.info('Stage 2: Issue updates planning completed', {
+      action: 'stage2_complete',
+      updatePlansCount: stage2Result.updatePlans.length,
+      noUpdateNeededCount: stage2Result.noUpdateNeeded.length,
+      summary: stage2Result.summary
+    });
+
+    return stage2Result;
   }
 
   // Stage 3: Identify missing features
@@ -199,50 +317,95 @@ ${updatePlans.map(plan => `- #${plan.issueNumber}: ${plan.updateSummary}`).join(
 
   // Main processing function
   async processPRD(prdFilePath: string, forceCreate: boolean = false): Promise<void> {
-    console.log(`🔄 Smart PRD Processing: ${prdFilePath}`);
+    logger.info('🚀 Smart PRD Processing Started', {
+      action: 'prd_processing_start',
+      prdFilePath,
+      forceCreate,
+      timestamp: new Date().toISOString()
+    });
 
     if (!fs.existsSync(prdFilePath)) {
+      logger.error('PRD file not found', {
+        action: 'prd_file_not_found',
+        prdFilePath
+      });
       throw new Error(`PRD file not found: ${prdFilePath}`);
     }
 
+    logger.debug('Reading PRD file', { action: 'prd_file_reading', prdFilePath });
     const prdContent = fs.readFileSync(prdFilePath, 'utf8');
+    logger.debug('PRD file read successfully', {
+      action: 'prd_file_read',
+      contentLength: prdContent.length,
+      contentPreview: prdContent.substring(0, 200) + '...'
+    });
 
     // Get existing issues
+    logger.debug('Fetching existing issues', {
+      action: 'existing_issues_fetch',
+      filters: { state: 'open', labels: ['prd-generated'] }
+    });
     const existingIssues = await this.issueService.getIssues({
       state: 'open',
       labels: ['prd-generated']
     });
 
-    console.log(`📊 Found ${existingIssues.length} existing issues`);
+    logger.info(`📊 Found ${existingIssues.length} existing issues`, {
+      action: 'existing_issues_found',
+      count: existingIssues.length,
+      issueNumbers: existingIssues.map(i => i.number)
+    });
 
     if (forceCreate || existingIssues.length === 0) {
-      console.log('🆕 Creating new issues (no existing issues or force create mode)');
+      logger.info('🆕 Creating new issues (no existing issues or force create mode)', {
+        action: 'creating_new_issues',
+        reason: forceCreate ? 'force_create_mode' : 'no_existing_issues',
+        forceCreate,
+        existingIssuesCount: existingIssues.length
+      });
       await this.createAllNewIssues(prdContent, prdFilePath);
       return;
     }
 
     // Get PRD diff using stored versions
+    logger.debug('Getting PRD diff using stored versions', {
+      action: 'prd_diff_start',
+      existingIssuesCount: existingIssues.length
+    });
     const prdDiff = await this.getPRDDiff(prdContent, existingIssues);
-    console.log(`📋 PRD changes analysis: ${prdDiff.split('\n').length} lines of diff`);
+    logger.info(`📋 PRD changes analysis: ${prdDiff.split('\n').length} lines of diff`, {
+      action: 'prd_diff_complete',
+      diffLines: prdDiff.split('\n').length,
+      diffLength: prdDiff.length,
+      diffPreview: prdDiff.substring(0, 300) + '...'
+    });
 
     // Stage 1: Identify relevant issues
-    console.log('🔍 Stage 1: Identifying relevant issues...');
+    logger.info('🔍 Stage 1: Identifying relevant issues...');
     const stage1Result = await this.identifyRelevantIssues(
       prdContent,
       prdDiff,
       existingIssues
     );
-    console.log(`  Found ${stage1Result.relevantIssues.length} relevant issues`);
+    logger.info(`  Found ${stage1Result.relevantIssues?.length || 0} relevant issues`, {
+      action: 'stage1_summary',
+      relevantIssuesCount: stage1Result.relevantIssues?.length || 0,
+      unrelatedIssuesCount: stage1Result.unrelatedIssues?.length || 0
+    });
 
     // Stage 2: Plan updates
-    console.log('📝 Stage 2: Planning issue updates...');
+    logger.info('📝 Stage 2: Planning issue updates...');
     const stage2Result = await this.planIssueUpdates(
       stage1Result.relevantIssues,
       existingIssues,
       prdContent,
       prdDiff
     );
-    console.log(`  Planned ${stage2Result.updatePlans.length} updates`);
+    logger.info(`  Planned ${stage2Result.updatePlans?.length || 0} updates`, {
+      action: 'stage2_summary',
+      updatePlansCount: stage2Result.updatePlans?.length || 0,
+      noUpdateNeededCount: stage2Result.noUpdateNeeded?.length || 0
+    });
 
     // Stage 3: Identify missing features
     console.log('🔎 Stage 3: Identifying missing features...');

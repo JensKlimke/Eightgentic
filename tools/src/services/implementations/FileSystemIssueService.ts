@@ -5,6 +5,10 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import * as yaml from 'js-yaml';
 import { IIssueService, Issue, IssueData, IssueUpdate, IssueFilters, Comment } from '../interfaces/IIssueService';
+import { log, createModuleLogger } from '../../utils/logger';
+
+// Create module-specific logger
+const logger = createModuleLogger('FileSystemIssueService');
 
 interface PRDVersion {
   contentFile: string;
@@ -38,16 +42,34 @@ export class FileSystemIssueService implements IIssueService {
     this.basePath = basePath;
     this.counterPath = path.join(basePath, 'counter.yaml');
     this.prdVersionsPath = path.join(basePath, 'prd-versions');
+
+    logger.debug('FileSystemIssueService initialized', {
+      action: 'service_initialization',
+      basePath: path.resolve(basePath),
+      counterPath: path.resolve(this.counterPath),
+      prdVersionsPath: path.resolve(this.prdVersionsPath)
+    });
+
     this.ensureDirectoryExists();
   }
 
   private ensureDirectoryExists(): void {
+    logger.debug('Ensuring directories exist', {
+      action: 'directory_check',
+      basePath: this.basePath,
+      prdVersionsPath: this.prdVersionsPath
+    });
+
     if (!fs.existsSync(this.basePath)) {
+      logger.debug('Creating base directory', { action: 'directory_create', path: this.basePath });
       fs.mkdirSync(this.basePath, { recursive: true });
     }
     if (!fs.existsSync(this.prdVersionsPath)) {
+      logger.debug('Creating PRD versions directory', { action: 'directory_create', path: this.prdVersionsPath });
       fs.mkdirSync(this.prdVersionsPath, { recursive: true });
     }
+
+    logger.debug('Directories verified/created successfully');
     if (!fs.existsSync(this.counterPath)) {
       this.saveCounter({ lastIssueNumber: 0 });
     }
@@ -201,6 +223,13 @@ export class FileSystemIssueService implements IIssueService {
   }
 
   async createIssue(issue: IssueData): Promise<number> {
+    logger.debug('Creating new issue', {
+      action: 'issue_creation_start',
+      title: issue.title,
+      labels: issue.labels,
+      bodyLength: issue.body.length
+    });
+
     const counter = this.getCounter();
     counter.lastIssueNumber++;
     this.saveCounter(counter);
@@ -216,6 +245,13 @@ export class FileSystemIssueService implements IIssueService {
       commentsDirectory: `issue-${counter.lastIssueNumber}-comments`
     };
 
+    logger.debug('Issue metadata prepared', {
+      action: 'issue_metadata_prepared',
+      issueNumber: newIssue.number,
+      bodyFile: newIssue.bodyFile,
+      commentsDirectory: newIssue.commentsDirectory
+    });
+
     const comments: Comment[] = [{
       body: "Issue created from PRD",
       created_at: new Date().toISOString(),
@@ -223,24 +259,75 @@ export class FileSystemIssueService implements IIssueService {
     }];
 
     this.saveIssue(newIssue, issue.body, comments);
-    console.log(`Created issue #${newIssue.number} in ${this.getIssuePath(newIssue.number)}`);
+
+    logger.info(`✅ Created issue #${newIssue.number}`, {
+      action: 'issue_created',
+      issueNumber: newIssue.number,
+      title: newIssue.title,
+      labels: newIssue.labels,
+      filePath: this.getIssuePath(newIssue.number),
+      bodyLength: issue.body.length
+    });
+
+    log.issueCreated(newIssue.number, newIssue.title, newIssue.labels, 'Created from PRD processing', issue.body);
+
     return newIssue.number;
   }
 
   async updateIssue(issueNumber: number, updates: IssueUpdate): Promise<void> {
+    logger.debug('Updating issue', {
+      action: 'issue_update_start',
+      issueNumber,
+      updates: {
+        hasTitle: updates.title !== undefined,
+        hasState: updates.state !== undefined,
+        hasLabels: updates.labels !== undefined,
+        hasBody: updates.body !== undefined
+      }
+    });
+
     const issue = this.loadIssue(issueNumber);
     if (!issue) {
+      logger.error(`Issue #${issueNumber} not found`, {
+        action: 'issue_update_error',
+        issueNumber,
+        error: 'issue_not_found'
+      });
       throw new Error(`Issue #${issueNumber} not found`);
     }
 
-    if (updates.title !== undefined) issue.title = updates.title;
-    if (updates.state !== undefined) issue.state = updates.state;
-    if (updates.labels !== undefined) issue.labels = updates.labels;
+    const changes: string[] = [];
+    if (updates.title !== undefined) {
+      const oldTitle = issue.title;
+      issue.title = updates.title;
+      changes.push(`title: "${oldTitle}" → "${updates.title}"`);
+    }
+    if (updates.state !== undefined) {
+      const oldState = issue.state;
+      issue.state = updates.state;
+      changes.push(`state: ${oldState} → ${updates.state}`);
+    }
+    if (updates.labels !== undefined) {
+      const oldLabels = issue.labels;
+      issue.labels = updates.labels;
+      changes.push(`labels: [${oldLabels.join(', ')}] → [${updates.labels.join(', ')}]`);
+    }
+    if (updates.body !== undefined) {
+      changes.push(`body: updated (${updates.body.length} characters)`);
+    }
     issue.updated_at = new Date().toISOString();
 
     // Save issue metadata and body if updated
     this.saveIssue(issue, updates.body);
-    console.log(`Updated issue #${issueNumber}`);
+
+    logger.info(`✅ Updated issue #${issueNumber}`, {
+      action: 'issue_updated',
+      issueNumber,
+      changes,
+      title: issue.title
+    });
+
+    log.issueUpdated(issueNumber, issue.title, changes, 'Updated from PRD processing');
   }
 
   async getIssues(filters?: IssueFilters): Promise<Issue[]> {
