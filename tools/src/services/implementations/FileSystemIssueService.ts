@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import * as yaml from 'js-yaml';
-import { IIssueService, Issue, IssueData, IssueUpdate, IssueFilters, Comment } from './IIssueService';
+import { IIssueService, Issue, IssueData, IssueUpdate, IssueFilters, Comment } from '../interfaces/IIssueService';
 
 interface PRDVersion {
   contentFile: string;

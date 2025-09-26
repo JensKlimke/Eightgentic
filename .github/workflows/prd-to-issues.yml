@@ -30,13 +30,15 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
       - name: Install dependencies
         run: |
-          npm install -g @anthropic-ai/claude-code
-          npm install @octokit/rest @anthropic-ai/sdk typescript ts-node
-
-      - name: Install TypeScript globally
-        run: npm install -g typescript ts-node
+          pnpm install
+          cd tools && pnpm install
 
       - name: Detect changed PRD files
         id: changed-files
@@ -47,6 +49,10 @@ jobs:
           echo "$CHANGED_FILES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
+      - name: Build tools
+        run: |
+          cd tools && pnpm run build
+
       - name: Generate issues from PRD
         if: steps.changed-files.outputs.changed_files != ''
         env:
@@ -55,11 +61,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
-          # Process each changed PRD file
+          # Process each changed PRD file using the new architecture
           echo "${{ steps.changed-files.outputs.changed_files }}" | while read -r file; do
             if [ -n "$file" ]; then
               echo "Processing PRD file: $file"
-              ts-node scripts/prd-processor-openai.ts "$file"
+              cd tools && pnpm run process-prd-openai "../$file"
             fi
           done
 

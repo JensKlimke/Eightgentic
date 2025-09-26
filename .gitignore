@@ -1,16 +1,31 @@
+# Build outputs
+/dist
+/tools/dist
 /tmp
 /out-tsc
 
+# Dependencies
 /node_modules
+/tools/node_modules
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log*
+pnpm-debug.log*
 /.pnp
 .pnp.js
 
+# IDE
 .vscode/*
 .idea
 
+# Environment
 .env
+.env.local
+.env.production
 
+# Test artifacts
 .test-issues
+.test-*
+
+# Generated code (optional - uncomment if you don't want to commit generated code)
+# /src/**
+# !/src/index.ts

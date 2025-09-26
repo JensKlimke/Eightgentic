@@ -3,9 +3,10 @@
 // scripts/test-prd-locally.ts
 // Local testing script for PRD processing with file-based issue storage
 
-import { SmartPRDProcessor } from './prd-processor-smart';
+import { SmartPRDProcessor } from '../processors/SmartPRDProcessor';
 import { IssueServiceFactory } from '../services/IssueServiceFactory';
-import { FileSystemIssueService } from '../services/FileSystemIssueService';
+import { FileSystemIssueService } from '../services/implementations/FileSystemIssueService';
+import { loadConfig } from '../config';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
@@ -47,8 +48,8 @@ async function main() {
   console.log('=========================================\n');
 
   // Configuration
-  const issuesPath = '.test-issues';
-  const prdPath = 'spec/prd/customer-data-management.md';
+  const issuesPath = path.join(__dirname, '../../../.test-issues');
+  const prdPath = path.join(__dirname, '../../../spec/prd/customer-data-management.md');
 
   // Check if PRD exists
   if (!fs.existsSync(prdPath)) {
@@ -65,7 +66,8 @@ async function main() {
   console.log(`📄 PRD file: ${prdPath}`);
 
   // Display AI provider and masked API key
-  const apiKey = process.env.OPENAI_API_KEY || '';
+  const config = loadConfig();
+  const apiKey = config.openai?.apiKey || '';
   const maskedKey = apiKey ? `${apiKey.substring(0, 7)}...${apiKey.substring(apiKey.length - 4)}` : 'Not configured';
 
   console.log(`🤖 AI Provider: OpenAI (GPT-4o)`);

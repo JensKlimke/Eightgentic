@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { IIssueService, Issue, IssueData } from '../services/IIssueService';
+import { IIssueService, Issue, IssueData } from '../services/interfaces/IIssueService';
 import { IssueServiceFactory } from '../services/IssueServiceFactory';
 
 const execAsync = promisify(exec);
@@ -84,7 +84,7 @@ export class SmartPRDProcessor {
   }
 
   async loadPrompt(promptFile: string): Promise<string> {
-    return fs.readFileSync(path.join('prompts', promptFile), 'utf8');
+    return fs.readFileSync(path.join(__dirname, '../../prompts', promptFile), 'utf8');
   }
 
   async analyzeWithAI(prompt: string, userContent: string): Promise<any> {
@@ -296,9 +296,9 @@ ${updatePlans.map(plan => `- #${plan.issueNumber}: ${plan.updateSummary}`).join(
 
   private async createNewIssues(features: AnalyzedFeature[], prdPath: string, prdContent?: string): Promise<void> {
     const issueTemplates = {
-      technical: fs.readFileSync('templates/technical-feature-template.md', 'utf8'),
-      nonTechnical: fs.readFileSync('templates/non-technical-feature-template.md', 'utf8'),
-      enabler: fs.readFileSync('templates/enabler-feature-template.md', 'utf8')
+      technical: fs.readFileSync(path.join(__dirname, '../../templates/technical-feature-template.md'), 'utf8'),
+      nonTechnical: fs.readFileSync(path.join(__dirname, '../../templates/non-technical-feature-template.md'), 'utf8'),
+      enabler: fs.readFileSync(path.join(__dirname, '../../templates/enabler-feature-template.md'), 'utf8')
     };
 
     for (const feature of features) {
@@ -334,7 +334,7 @@ ${updatePlans.map(plan => `- #${plan.issueNumber}: ${plan.updateSummary}`).join(
 
   private async createAllNewIssues(prdContent: string, prdPath: string): Promise<void> {
     // Use existing PRD analysis prompt for new issues
-    const analysisPrompt = fs.readFileSync('prompts/prd-analysis-prompt.md', 'utf8');
+    const analysisPrompt = fs.readFileSync(path.join(__dirname, '../../prompts/prd-analysis-prompt.md'), 'utf8');
 
     const userContent = `Analyze this PRD document and extract features:
 

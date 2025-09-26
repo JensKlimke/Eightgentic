@@ -1,0 +1,30 @@
+{
+  "name": "@eightgent/tools",
+  "version": "1.0.0",
+  "description": "Agentic code generation tools for processing PRDs into GitHub issues",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "dev": "tsc --watch",
+    "test-local": "ts-node src/cli/test-prd-locally.ts",
+    "process-prd": "ts-node src/processors/BasicPRDProcessor.ts",
+    "process-prd-openai": "ts-node src/processors/OpenAIPRDProcessor.ts",
+    "process-prd-smart": "ts-node src/processors/SmartPRDProcessor.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.24.0",
+    "@octokit/rest": "^20.0.0",
+    "dotenv": "^17.2.2",
+    "js-yaml": "^4.1.0",
+    "openai": "^4.63.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.5",
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.5.3"
+  },
+  "private": true
+}

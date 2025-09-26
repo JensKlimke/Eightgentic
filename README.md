@@ -1,129 +1,182 @@
-# Repository Structure
+# Eightgent - Agentic Code Generation Platform
 
-Here's the recommended folder structure for your repository:
+Transform Product Requirements Documents (PRDs) into executable code using AI-powered agents.
+
+## 🏗️ Architecture
+
+Eightgent is designed as a **dual-purpose platform**:
+
+1. **Generation Tools** (`tools/`) - AI-powered agents for processing PRDs
+2. **Generated Code** (`src/`) - Output directory for generated application code
 
 ```
-your-repo/
-├── .github/
-│   └── workflows/
-│       └── prd-to-issues.yml
-├── spec/
-│   ├── prd/                    # PRD documents go here
-│   │   ├── feature-x.md        # Example PRD
-│   │   └── integration-y.md    # Another PRD
-│   └── arch/                   # Architecture docs
-├── scripts/
-│   └── prd-processor.ts        # Main processing script
-├── prompts/
-│   └── prd-analysis-prompt.md  # System prompt for Claude
-├── templates/
-│   ├── technical-feature-template.md
-│   ├── non-technical-feature-template.md
-│   ├── enabler-feature-template.md
-│   └── open-question-template.md
-├── package.json                # Dependencies
-└── README.md
+eightgent/
+├── tools/                   # 🤖 Agentic generation tools
+│   ├── src/
+│   │   ├── processors/      # PRD → Issues processors
+│   │   ├── services/        # Issue management
+│   │   ├── cli/             # Command-line tools
+│   │   └── config/          # Configuration
+│   ├── prompts/             # AI prompts
+│   ├── templates/           # Issue templates
+│   └── dist/                # Compiled tools
+├── src/                     # 📁 Generated application code
+├── spec/                    # 📋 PRD specifications
+│   └── prd/
+└── .github/                 # ⚙️ Workflows
 ```
 
-## Setup Instructions
+## 🚀 Quick Start
 
-### 1. Repository Secrets
-Add these secrets in your GitHub repository settings:
+### Installation
+```bash
+# Install dependencies for both tools and generated code
+pnpm install
 
-- `ANTHROPIC_API_KEY`: Your Anthropic API key for Claude
-- `GITHUB_TOKEN`: Automatically provided by GitHub Actions
+# Install tools dependencies
+cd tools && pnpm install
+```
 
-### 2. Package.json
-Create a `package.json` file:
+### Environment Setup
+```bash
+# Copy and configure environment
+cp .env.example .env
 
-```json
-{
-  "name": "prd-processor",
-  "version": "1.0.0",
-  "description": "Automated PRD to GitHub Issues processor",
-  "scripts": {
-    "process-prd": "ts-node scripts/prd-processor.ts"
-  },
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.24.0",
-    "@octokit/rest": "^20.0.0",
-    "typescript": "^5.0.0",
-    "ts-node": "^10.9.0"
-  },
-  "devDependencies": {
-    "@types/node": "^20.0.0"
+# Set your API keys
+OPENAI_API_KEY=your_openai_key
+GITHUB_TOKEN=your_github_token
+```
+
+### Process a PRD
+```bash
+# Interactive local testing
+pnpm run test-local
+
+# Process PRD with smart updates
+pnpm run process-prd-smart spec/prd/customer-data-management.md
+```
+
+## 🔧 Tools Overview
+
+### Processors
+- **SmartPRDProcessor** - Intelligent 3-stage analysis with issue updates
+- **OpenAIPRDProcessor** - OpenAI GPT-4 based processing
+- **BasicPRDProcessor** - Anthropic Claude based processing
+
+### Services
+- **FileSystemIssueService** - Local file-based issue storage
+- **GitHubIssueService** - GitHub API integration
+- **InMemoryIssueService** - Testing service
+
+### Features
+- ✅ **Smart Issue Updates** - Only updates changed issues
+- ✅ **PRD Version Tracking** - Stores PRD snapshots with issues
+- ✅ **Multi-stage Analysis** - Identifies relevant issues → plans updates → creates new issues
+- ✅ **Dependency Injection** - Pluggable service architecture
+- ✅ **TypeScript Best Practices** - Proper module structure and exports
+
+## 📖 Usage
+
+### Development Workflow
+
+1. **Write PRD** - Create specification in `spec/prd/`
+2. **Process PRD** - Run tools to generate issues
+3. **Generate Code** - Tools output code to `src/`
+4. **Iterate** - Update PRD and re-process for smart updates
+
+### Available Commands
+
+```bash
+# Tools development
+pnpm run build:tools         # Build tools
+pnpm run dev:tools           # Watch mode for tools
+
+# PRD Processing
+pnpm run test-local          # Interactive testing
+pnpm run process-prd-smart   # Smart processing with updates
+pnpm run process-prd-openai  # OpenAI processing
+pnpm run process-prd         # Basic Anthropic processing
+
+# Generated Code
+pnpm run build:generated     # Build generated code
+pnpm run build              # Build everything
+```
+
+### Configuration
+
+Tools configuration in `tools/src/config/`:
+- OpenAI API integration
+- GitHub API setup
+- Service factory patterns
+
+## 🎯 Core Concepts
+
+### Agentic Generation
+The platform uses AI agents to:
+1. **Analyze** PRDs for features and requirements
+2. **Generate** GitHub issues with proper categorization
+3. **Update** existing issues intelligently
+4. **Track** changes between PRD versions
+
+### Issue Management
+- **File-based Storage** - Issues stored as YAML + Markdown files
+- **PRD Version Tracking** - Each issue links to PRD snapshot
+- **Smart Diffing** - Compare current PRD with stored versions
+- **Incremental Updates** - Only change what's actually different
+
+### TypeScript Architecture
+- **Barrel Exports** - Clean import patterns
+- **Dependency Injection** - Testable service architecture
+- **Type Safety** - Full TypeScript coverage
+- **Modular Design** - Separated concerns and responsibilities
+
+## 📁 Generated Code
+
+The `src/` directory is reserved for **generated application code**. The tools will output:
+- API endpoints
+- Database models
+- UI components
+- Business logic
+- Tests
+
+## 🛠️ Development
+
+### Adding New Processors
+```typescript
+// tools/src/processors/MyProcessor.ts
+export class MyProcessor {
+  async processPRD(prdContent: string): Promise<void> {
+    // Implementation
   }
 }
 ```
 
-### 3. Initial Workflow Test
-
-1. Set up the folder structure
-2. Add all the files (workflow, scripts, prompts, templates)
-3. Configure repository secrets
-4. Create a test PRD in `spec/prd/test-feature.md`
-5. Push to trigger the workflow
-
-### 4. PRD Document Format
-
-Your PRD documents should be well-structured markdown files. Here's a suggested format:
-
-```markdown
-# Feature Name
-
-## Overview
-Brief description of what we're building and why.
-
-## Goals
-- Primary goal 1
-- Primary goal 2
-
-## Requirements
-### Functional Requirements
-- Requirement 1
-- Requirement 2
-
-### Non-Functional Requirements  
-- Performance requirements
-- Security requirements
-- Scalability requirements
-
-## User Stories
-As a [user type], I want [functionality] so that [benefit].
-
-## Success Metrics
-How we'll measure success.
-
-## Open Questions
-- Question 1: What should happen when...?
-- Question 2: How do we handle...?
-
-## Dependencies
-- External system X
-- Feature Y must be completed first
-
-## Timeline
-Expected delivery timeline and milestones.
+### Creating Custom Services
+```typescript
+// Implement IIssueService interface
+export class MyIssueService implements IIssueService {
+  // Required methods
+}
 ```
 
-## Workflow Behavior
+### Extending Configuration
+```typescript
+// tools/src/config/index.ts
+export interface CustomConfig extends Config {
+  myService?: {
+    apiKey: string;
+  };
+}
+```
 
-1. **Trigger**: Workflow runs when PRD files are added/modified in `spec/prd/`
-2. **Analysis**: Claude analyzes the PRD content using the system prompt
-3. **Issue Creation**: Automatically creates GitHub issues for:
-    - Technical features (🔧)
-    - Non-technical features (📋)
-    - Enabler features (🚀)
-    - Open questions (❓) - marked as blockers
-4. **Labeling**: Issues get appropriate labels for filtering and organization
-5. **Summary**: Commit comment with summary of created issues
+## 🤝 Contributing
 
-## Customization Options
+1. Fork the repository
+2. Create feature branch
+3. Make changes in `tools/` directory
+4. Test with `pnpm run test-local`
+5. Submit pull request
 
-- **Modify templates**: Adjust issue templates in `/templates/` folder
-- **Update system prompt**: Fine-tune the analysis behavior in `/prompts/`
-- **Add validation**: Extend the TypeScript script for additional checks
-- **Custom labels**: Modify the labeling strategy in the processor script
-- **Integration**: Add Slack notifications, project board automation, etc.
+## 📜 License
 
-This solution provides a complete automated pipeline from PRD document to organized, actionable GitHub issues ready for development teams.
+MIT License - see LICENSE file for details.

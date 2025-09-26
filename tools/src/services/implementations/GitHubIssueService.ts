@@ -1,7 +1,7 @@
 // services/GitHubIssueService.ts
 
 import { Octokit } from '@octokit/rest';
-import { IIssueService, Issue, IssueData, IssueUpdate, IssueFilters, Comment } from './IIssueService';
+import { IIssueService, Issue, IssueData, IssueUpdate, IssueFilters, Comment } from '../interfaces/IIssueService';
 
 export class GitHubIssueService implements IIssueService {
   private octokit: Octokit;

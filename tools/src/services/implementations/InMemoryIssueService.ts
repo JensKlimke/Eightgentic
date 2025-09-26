@@ -1,6 +1,6 @@
 // services/InMemoryIssueService.ts
 
-import { IIssueService, Issue, IssueData, IssueUpdate, IssueFilters, Comment } from './IIssueService';
+import { IIssueService, Issue, IssueData, IssueUpdate, IssueFilters, Comment } from '../interfaces/IIssueService';
 
 export class InMemoryIssueService implements IIssueService {
   private issues: Map<number, Issue> = new Map();

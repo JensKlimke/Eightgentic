@@ -1,5 +1,5 @@
-// scripts/prd-processor-openai.ts
-import OpenAI from 'openai';
+// scripts/prd-processor.ts
+import { Anthropic } from '@anthropic-ai/sdk';
 import { Octokit } from '@octokit/rest';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -26,14 +26,14 @@ interface PRDAnalysis {
 }
 
 class ProductManagerAgent {
-  private openai: OpenAI;
+  private anthropic: Anthropic;
   private octokit: Octokit;
   private repoOwner: string;
   private repoName: string;
 
   constructor() {
-    this.openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY!
+    this.anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY!
     });
 
     this.octokit = new Octokit({
@@ -49,12 +49,12 @@ class ProductManagerAgent {
     analysisPrompt: string;
     issueTemplates: Record<string, string>;
   }> {
-    const analysisPrompt = fs.readFileSync('prompts/prd-analysis-prompt.md', 'utf8');
+    const analysisPrompt = fs.readFileSync(path.join(__dirname, '../../prompts/prd-analysis-prompt.md'), 'utf8');
 
     const issueTemplates = {
-      technical: fs.readFileSync('templates/technical-feature-template.md', 'utf8'),
-      nonTechnical: fs.readFileSync('templates/non-technical-feature-template.md', 'utf8'),
-      enabler: fs.readFileSync('templates/enabler-feature-template.md', 'utf8')
+      technical: fs.readFileSync(path.join(__dirname, '../../templates/technical-feature-template.md'), 'utf8'),
+      nonTechnical: fs.readFileSync(path.join(__dirname, '../../templates/non-technical-feature-template.md'), 'utf8'),
+      enabler: fs.readFileSync(path.join(__dirname, '../../templates/enabler-feature-template.md'), 'utf8')
     };
 
     return { analysisPrompt, issueTemplates };
@@ -63,18 +63,13 @@ class ProductManagerAgent {
   async analyzePRD(prdContent: string, prdPath: string): Promise<PRDAnalysis> {
     const { analysisPrompt } = await this.loadSystemPrompts();
 
-    const response = await this.openai.chat.completions.create({
-      model: 'gpt-4o',
+    const response = await this.anthropic.messages.create({
+      model: 'claude-3-5-sonnet-20241022',
       max_tokens: 4000,
-      temperature: 0.1,
-      messages: [
-        {
-          role: 'system',
-          content: analysisPrompt
-        },
-        {
-          role: 'user',
-          content: `Analyze this PRD document and extract features and open questions:
+      system: analysisPrompt,
+      messages: [{
+        role: 'user',
+        content: `Analyze this PRD document and extract features and open questions:
 
 PRD File Path: ${prdPath}
 
@@ -82,11 +77,10 @@ PRD Content:
 ${prdContent}
 
 Please provide your analysis in JSON format matching the expected structure for features and open questions.`
-        }
-      ]
+      }]
     });
 
-    const analysisText = response.choices[0]?.message?.content || '';
+    const analysisText = response.content[0].type === 'text' ? response.content[0].text : '';
 
     try {
       // Extract JSON from the response (handle potential markdown code blocks)
@@ -160,7 +154,7 @@ Please provide your analysis in JSON format matching the expected structure for 
 
     const prdContent = fs.readFileSync(prdFilePath, 'utf8');
 
-    console.log('Analyzing PRD with OpenAI GPT-4...');
+    console.log('Analyzing PRD with Claude...');
     const analysis = await this.analyzePRD(prdContent, prdFilePath);
 
     console.log(`Found ${analysis.features.length} features`);
@@ -196,7 +190,7 @@ async function main() {
   const prdFilePath = process.argv[2];
 
   if (!prdFilePath) {
-    console.error('Usage: ts-node prd-processor-openai.ts <prd-file-path>');
+    console.error('Usage: ts-node prd-processor.ts <prd-file-path>');
     process.exit(1);
   }
 

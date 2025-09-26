@@ -1,9 +1,10 @@
 // services/IssueServiceFactory.ts
 
-import { IIssueService } from './IIssueService';
-import { GitHubIssueService } from './GitHubIssueService';
-import { FileSystemIssueService } from './FileSystemIssueService';
-import { InMemoryIssueService } from './InMemoryIssueService';
+import * as path from 'path';
+import { IIssueService } from './interfaces/IIssueService';
+import { GitHubIssueService } from './implementations/GitHubIssueService';
+import { FileSystemIssueService } from './implementations/FileSystemIssueService';
+import { InMemoryIssueService } from './implementations/InMemoryIssueService';
 
 export type ServiceType = 'github' | 'filesystem' | 'memory';
 
@@ -31,7 +32,7 @@ export class IssueServiceFactory {
         });
 
       case 'filesystem':
-        return new FileSystemIssueService(config?.path || '.issues');
+        return new FileSystemIssueService(config?.path || path.join(__dirname, '../../../.issues'));
 
       case 'memory':
         return new InMemoryIssueService();
@@ -61,7 +62,7 @@ export class IssueServiceFactory {
         });
 
       case 'filesystem':
-        return new FileSystemIssueService(process.env.ISSUE_STORAGE_PATH || '.issues');
+        return new FileSystemIssueService(process.env.ISSUE_STORAGE_PATH || path.join(__dirname, '../../../.issues'));
 
       case 'memory':
         return new InMemoryIssueService();

@@ -10,8 +10,16 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "declaration": true,
+    "declarationMap": true,
     "sourceMap": true,
-    "moduleResolution": "node"
+    "moduleResolution": "node",
+    "baseUrl": "src",
+    "paths": {
+      "@/*": ["*"],
+      "@/services/*": ["services/*"],
+      "@/processors/*": ["processors/*"],
+      "@/config/*": ["config/*"]
+    }
   },
   "include": [
     "src/**/*"
@@ -19,7 +27,6 @@
   "exclude": [
     "node_modules",
     "dist",
-    "tools",
     "**/*.test.ts"
   ]
 }
