@@ -68,10 +68,10 @@ const logger = winston.createLogger({
       tailable: true
     }),
 
-    // Console transport
+    // Console transport - only show info and above by default
     new winston.transports.Console({
       format: consoleFormat,
-      level: process.env.NODE_ENV === 'production' ? 'info' : 'debug'
+      level: 'info' // Always info level for console, debug goes to files only
     })
   ],
 
@@ -175,6 +175,17 @@ export const log = {
 // Set log level based on verbose flag
 export function setLogLevel(level: 'error' | 'warn' | 'info' | 'debug' | 'verbose') {
   logger.level = level;
+
+  // Update console transport level dynamically based on the requested level
+  const consoleTransport = logger.transports.find(t => t.constructor.name === 'Console');
+  if (consoleTransport) {
+    if (level === 'debug' || level === 'verbose') {
+      (consoleTransport as any).level = 'debug'; // Show debug in console for verbose mode
+    } else {
+      (consoleTransport as any).level = 'info'; // Default: only info and above in console
+    }
+  }
+
   logger.info(`🔧 Log level set to: ${level}`);
 }
 

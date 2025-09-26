@@ -27,6 +27,7 @@ interface AnalyzedFeature {
   reason?: string;
 }
 
+// Legacy interfaces - kept for compatibility during transition
 interface Stage1Result {
   relevantIssues: Array<{
     issueNumber: number;
@@ -61,6 +62,41 @@ interface Stage3Result {
     summary: string;
   };
   features: AnalyzedFeature[];
+}
+
+// New unified planning interfaces
+interface ChangeAssessment {
+  hasSignificantChanges: boolean;
+  changeSummary: string;
+  trivialChangesIgnored: string[];
+  reasoningForSignificance: string;
+}
+
+interface IssueUpdatePlan {
+  issueNumber: number;
+  action: 'update' | 'obsolete' | 'no_change';
+  changeSignificance: 'minor' | 'major' | 'scope_change';
+  reasoning: string;
+  updates?: {
+    title?: string;
+    body?: string;
+    labels?: string[];
+  };
+  comment?: string;
+  updateSummary?: string;
+}
+
+interface UnifiedPlanResult {
+  changeAssessment: ChangeAssessment;
+  issueUpdates: IssueUpdatePlan[];
+  newFeatures: AnalyzedFeature[];
+  summary: {
+    totalIssuesAnalyzed: number;
+    issuesRequiringUpdates: number;
+    issuesMarkedObsolete: number;
+    newIssuesNeeded: number;
+    overallRationale: string;
+  };
 }
 
 export class SmartPRDProcessor {
@@ -109,6 +145,243 @@ export class SmartPRDProcessor {
       contentPreview: content.substring(0, 150) + '...'
     });
     return content;
+  }
+
+  // Smart change detection to filter trivial changes
+  analyzeChangeSignificance(prdDiff: string): { isSignificant: boolean, filteredDiff: string, trivialChanges: string[] } {
+    const lines = prdDiff.split('\n');
+    const trivialPatterns = [
+      /^[+\-]\s*version:\s*\d+\.\d+/i,  // Version numbers
+      /^[+\-]\s*date:\s*\d{4}-\d{2}-\d{2}/i,  // Dates
+      /^[+\-]\s*updated:\s*\d{4}-\d{2}-\d{2}/i,  // Update dates
+      /^[+\-]\s*v\d+\.\d+(\.\d+)?/i,  // Version references
+      /^[+\-]\s*\*\*last\s*updated/i,  // Last updated headers
+      /^[+\-]\s*#+\s*changelog/i,  // Changelog sections
+      /^[+\-]\s*\|\s*\d+\.\d+\s*\|/,  // Version tables
+    ];
+
+    const trivialChanges: string[] = [];
+    const significantLines: string[] = [];
+
+    for (const line of lines) {
+      if (line.trim() === '') {
+        continue;
+      }
+
+      const isTrivial = trivialPatterns.some(pattern => pattern.test(line));
+      if (isTrivial) {
+        trivialChanges.push(line.trim());
+      } else if (line.startsWith('+') || line.startsWith('-')) {
+        significantLines.push(line);
+      } else {
+        significantLines.push(line); // Context lines
+      }
+    }
+
+    const hasSignificantChanges = significantLines.some(line =>
+      (line.startsWith('+') || line.startsWith('-')) && line.trim().length > 3
+    );
+
+    logger.debug('Change significance analysis complete', {
+      action: 'change_significance_analysis',
+      totalLines: lines.length,
+      trivialChanges: trivialChanges.length,
+      significantLines: significantLines.length,
+      hasSignificantChanges,
+      trivialChangesSample: trivialChanges.slice(0, 3)
+    });
+
+    return {
+      isSignificant: hasSignificantChanges,
+      filteredDiff: significantLines.join('\n'),
+      trivialChanges
+    };
+  }
+
+  // Unified planning method (replaces the 3-stage process)
+  async planComprehensiveChanges(
+    prdContent: string,
+    prdDiff: string,
+    existingIssues: Issue[]
+  ): Promise<UnifiedPlanResult> {
+    logger.info('🎯 Stage 1: Starting unified comprehensive planning', {
+      action: 'unified_planning_start',
+      existingIssuesCount: existingIssues.length,
+      prdLength: prdContent.length,
+      diffLength: prdDiff.length
+    });
+
+    // First, analyze change significance
+    const changeAnalysis = this.analyzeChangeSignificance(prdDiff);
+
+    if (!changeAnalysis.isSignificant) {
+      logger.info('📋 No significant changes detected - skipping processing', {
+        action: 'no_significant_changes',
+        trivialChangesCount: changeAnalysis.trivialChanges.length,
+        trivialChangesSample: changeAnalysis.trivialChanges.slice(0, 3)
+      });
+
+      return {
+        changeAssessment: {
+          hasSignificantChanges: false,
+          changeSummary: 'Only trivial changes detected (version numbers, dates, formatting)',
+          trivialChangesIgnored: changeAnalysis.trivialChanges,
+          reasoningForSignificance: 'Changes are limited to non-functional updates that do not affect issue content'
+        },
+        issueUpdates: existingIssues.map(issue => ({
+          issueNumber: issue.number,
+          action: 'no_change' as const,
+          changeSignificance: 'minor' as const,
+          reasoning: 'No significant changes affect this issue'
+        })),
+        newFeatures: [],
+        summary: {
+          totalIssuesAnalyzed: existingIssues.length,
+          issuesRequiringUpdates: 0,
+          issuesMarkedObsolete: 0,
+          newIssuesNeeded: 0,
+          overallRationale: 'No action required - only trivial changes detected'
+        }
+      };
+    }
+
+    // Load the unified planning prompt
+    const prompt = await this.loadPrompt('prd-unified-planning.md');
+
+    // Build comprehensive context for AI analysis
+    const existingIssuesContext = existingIssues.map(issue => ({
+      number: issue.number,
+      title: issue.title,
+      body: issue.body,
+      labels: issue.labels
+    }));
+
+    const userContent = `
+## Current PRD Content:
+${prdContent}
+
+## PRD Changes (Filtered for Significance):
+${changeAnalysis.filteredDiff}
+
+## Trivial Changes Filtered Out:
+${changeAnalysis.trivialChanges.join('\n')}
+
+## Existing Issues:
+${JSON.stringify(existingIssuesContext, null, 2)}
+
+## Previous Processing Context:
+This is an update to an existing PRD. Focus on semantic changes that affect implementation or requirements.
+Total existing issues: ${existingIssues.length}
+Trivial changes filtered: ${changeAnalysis.trivialChanges.length}
+`;
+
+    logger.debug('Sending unified planning request to AI', {
+      action: 'unified_planning_ai_request',
+      promptLength: prompt.length,
+      userContentLength: userContent.length,
+      existingIssuesCount: existingIssues.length,
+      significantChangesOnly: true
+    });
+
+    const result = await this.analyzeWithAI(prompt, userContent);
+
+    // Add reasoning enhancement
+    if (result.newFeatures) {
+      result.newFeatures = result.newFeatures.map((feature: any) => ({
+        ...feature,
+        reason: feature.reasoning || 'New feature identified from PRD updates'
+      }));
+    }
+
+    logger.info('🎯 Stage 1 Complete: Unified planning finished', {
+      action: 'unified_planning_complete',
+      hasSignificantChanges: result.changeAssessment?.hasSignificantChanges || false,
+      issuesRequiringUpdates: result.summary?.issuesRequiringUpdates || 0,
+      newFeaturesIdentified: result.summary?.newIssuesNeeded || 0,
+      trivialChangesIgnored: changeAnalysis.trivialChanges.length
+    });
+
+    return result;
+  }
+
+  // Stage 2: Execute the planned changes
+  async executeChanges(
+    planResult: UnifiedPlanResult,
+    prdContent: string,
+    prdFilePath: string
+  ): Promise<{ updated: number, created: number, unchanged: number }> {
+    logger.info('⚡ Stage 2: Starting change execution', {
+      action: 'change_execution_start',
+      issuesRequiringUpdates: planResult.summary.issuesRequiringUpdates,
+      newIssuesNeeded: planResult.summary.newIssuesNeeded,
+      totalIssuesAnalyzed: planResult.summary.totalIssuesAnalyzed
+    });
+
+    let updatedCount = 0;
+    let createdCount = 0;
+    let unchangedCount = 0;
+
+    // Execute issue updates
+    for (const updatePlan of planResult.issueUpdates) {
+      if (updatePlan.action === 'update') {
+        logger.info(`🔄 Updating Issue #${updatePlan.issueNumber}: ${updatePlan.updateSummary}`, {
+          action: 'issue_update_execution',
+          issueNumber: updatePlan.issueNumber,
+          changeSignificance: updatePlan.changeSignificance,
+          reasoning: updatePlan.reasoning
+        });
+
+        if (updatePlan.updates && Object.keys(updatePlan.updates).length > 0) {
+          await this.issueService.updateIssue(updatePlan.issueNumber, updatePlan.updates);
+          updatedCount++;
+        }
+
+        if (updatePlan.comment) {
+          await this.issueService.addComment(updatePlan.issueNumber, updatePlan.comment);
+        }
+
+        // Store updated PRD version with the issue
+        if (this.issueService.storePRDVersion) {
+          await this.issueService.storePRDVersion(updatePlan.issueNumber, prdContent, prdFilePath);
+        }
+
+      } else if (updatePlan.action === 'obsolete') {
+        logger.info(`🗑️ Marking Issue #${updatePlan.issueNumber} as obsolete: ${updatePlan.reasoning}`);
+        // Add obsolete label or comment instead of closing
+        await this.issueService.addComment(updatePlan.issueNumber,
+          `⚠️ This issue may be obsolete due to PRD changes: ${updatePlan.reasoning}`);
+        updatedCount++;
+
+      } else {
+        logger.debug(`✅ Issue #${updatePlan.issueNumber}: No changes needed`);
+        unchangedCount++;
+      }
+    }
+
+    // Create new issues
+    if (planResult.newFeatures && planResult.newFeatures.length > 0) {
+      logger.info('➕ Creating new issues for identified features...', {
+        action: 'new_issues_creation_start',
+        newFeaturesCount: planResult.newFeatures.length
+      });
+
+      await this.createNewIssues(planResult.newFeatures, prdFilePath, prdContent);
+      createdCount = planResult.newFeatures.length;
+    }
+
+    logger.info('⚡ Stage 2 Complete: Change execution finished', {
+      action: 'change_execution_complete',
+      issuesUpdated: updatedCount,
+      issuesCreated: createdCount,
+      issuesUnchanged: unchangedCount,
+      totalProcessed: updatedCount + createdCount + unchangedCount
+    });
+
+    return {
+      updated: updatedCount,
+      created: createdCount,
+      unchanged: unchangedCount
+    };
   }
 
   async analyzeWithAI(prompt: string, userContent: string): Promise<any> {
@@ -397,82 +670,52 @@ ${updatePlans.map(plan => `- #${plan.issueNumber}: ${plan.updateSummary}`).join(
     });
     const prdDiff = await this.getPRDDiff(prdContent, existingIssues);
     const diffLines = prdDiff.split('\n').length;
-    const significantChanges = prdDiff.includes('+ ') || prdDiff.includes('- ');
-    logger.info(`📋 PRD Analysis: ${diffLines} lines of diff detected (${significantChanges ? 'contains significant changes' : 'minimal changes'})`, {
+    logger.info(`📋 PRD Analysis: ${diffLines} lines of diff detected`, {
       action: 'prd_diff_complete',
       diffLines,
       diffLength: prdDiff.length,
-      hasSignificantChanges: significantChanges,
       diffPreview: prdDiff.substring(0, 300) + '...'
     });
 
-    // Log key changes at info level
-    const changeLines = prdDiff.split('\n').filter(line => line.startsWith('+ ') || line.startsWith('- ')).slice(0, 5);
-    if (changeLines.length > 0) {
-      logger.info(`🔍 Key changes detected:`);
-      changeLines.forEach(line => {
-        logger.info(`   ${line}`);
+    // ===== NEW 2-STAGE PROCESS =====
+
+    // Stage 1: Comprehensive Planning (replaces old 3-stage analysis)
+    const planResult = await this.planComprehensiveChanges(prdContent, prdDiff, existingIssues);
+
+    // Early exit if no significant changes detected
+    if (!planResult.changeAssessment.hasSignificantChanges) {
+      logger.info(`✅ Smart PRD Processing Complete: No significant changes detected`, {
+        action: 'prd_processing_complete_no_changes',
+        trivialChangesIgnored: planResult.changeAssessment.trivialChangesIgnored.length,
+        reasoning: planResult.changeAssessment.reasoningForSignificance
       });
+      return;
     }
 
-    // Stage 1: Identify relevant issues
-    logger.info('🔍 Stage 1: Identifying relevant issues...');
-    const stage1Result = await this.identifyRelevantIssues(
-      prdContent,
-      prdDiff,
-      existingIssues
-    );
-    logger.info(`  Found ${stage1Result.relevantIssues?.length || 0} relevant issues`, {
-      action: 'stage1_summary',
-      relevantIssuesCount: stage1Result.relevantIssues?.length || 0,
-      unrelatedIssuesCount: stage1Result.unrelatedIssues?.length || 0
-    });
+    // Stage 2: Execute Changes
+    const executionResult = await this.executeChanges(planResult, prdContent, prdFilePath);
 
-    // Stage 2: Plan updates
-    logger.info('📝 Stage 2: Planning issue updates...');
-    const stage2Result = await this.planIssueUpdates(
-      stage1Result.relevantIssues,
-      existingIssues,
-      prdContent,
-      prdDiff
-    );
-    logger.info(`  Planned ${stage2Result.updatePlans?.length || 0} updates`, {
-      action: 'stage2_summary',
-      updatePlansCount: stage2Result.updatePlans?.length || 0,
-      noUpdateNeededCount: stage2Result.noUpdateNeeded?.length || 0
-    });
-
-    // Stage 3: Identify missing features
-    console.log('🔎 Stage 3: Identifying missing features...');
-    const stage3Result = await this.identifyMissingFeatures(
-      prdContent,
-      existingIssues,
-      prdDiff,
-      stage2Result.updatePlans
-    );
-    console.log(`  Found ${stage3Result.features.length} new features`);
-
-    // Execute updates and store updated PRD versions
-    console.log('⚡ Executing updates...');
-    await this.executeUpdates(stage2Result.updatePlans, prdContent, prdFilePath);
-
-    // Create new issues
-    logger.info('➕ Creating new issues for missing features identified in Stage 3...');
-    await this.createNewIssues(stage3Result.features, prdFilePath, prdContent);
-
-    // Generate summary
+    // Generate enhanced summary
     const summary = {
-      updated: stage2Result.updatePlans.length,
-      created: stage3Result.features.length,
-      unchanged: stage2Result.noUpdateNeeded.length,
+      updated: executionResult.updated,
+      created: executionResult.created,
+      unchanged: executionResult.unchanged,
+      changeAssessment: planResult.changeAssessment,
+      overallRationale: planResult.summary.overallRationale,
       timestamp: new Date().toISOString()
     };
 
     fs.writeFileSync('smart-update-summary.json', JSON.stringify(summary, null, 2));
     logger.info(`✅ Smart PRD Processing Complete: ${summary.updated} updated, ${summary.created} created, ${summary.unchanged} unchanged issues`, {
       action: 'prd_processing_complete',
-      summary,
-      totalIssuesProcessed: summary.updated + summary.created + summary.unchanged
+      summary: {
+        updated: summary.updated,
+        created: summary.created,
+        unchanged: summary.unchanged,
+        overallRationale: summary.overallRationale
+      },
+      totalIssuesProcessed: summary.updated + summary.created + summary.unchanged,
+      trivialChangesFiltered: planResult.changeAssessment.trivialChangesIgnored.length
     });
   }
 

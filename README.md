@@ -72,16 +72,25 @@ pnpm run process-prd-smart spec/prd/customer-data-management.md
 - ✅ **Smart Issue Updates** - Only updates changed issues
 - ✅ **PRD Version Tracking** - Stores PRD snapshots with issues
 - ✅ **Multi-stage Analysis** - Identifies relevant issues → plans updates → creates new issues
+- ✅ **Winston Logging** - Comprehensive logging with debug/verbose modes
+- ✅ **Processing Summaries** - Generate detailed reports from logs
 - ✅ **Dependency Injection** - Pluggable service architecture
 - ✅ **TypeScript Best Practices** - Proper module structure and exports
 
-## 📖 Usage
+## 📖 PRD to Issues Process
 
-### Development Workflow
+### How Issues Are Created/Updated
+
+1. **PRD Analysis** - AI analyzes your PRD document to extract features and requirements
+2. **Issue Classification** - Automatically categorizes as technical/non-technical with priorities
+3. **Smart Processing** - Compares with existing issues to determine updates vs new creation
+4. **Structured Output** - Creates GitHub issues with labels, effort estimates, and acceptance criteria
+
+### Workflow
 
 1. **Write PRD** - Create specification in `spec/prd/`
-2. **Process PRD** - Run tools to generate issues
-3. **Generate Code** - Tools output code to `src/`
+2. **Process PRD** - Run tools to generate/update issues
+3. **Review Issues** - Check generated issues in `.test-issues/` (local) or GitHub
 4. **Iterate** - Update PRD and re-process for smart updates
 
 ### Available Commands
@@ -92,8 +101,8 @@ pnpm run build:tools         # Build tools
 pnpm run dev:tools           # Watch mode for tools
 
 # PRD Processing
-pnpm run test-local          # Interactive testing
-pnpm run process-prd-smart   # Smart processing with updates
+pnpm run test-local          # Interactive CLI with logging & summaries
+pnpm run process-prd-smart   # Smart processing with updates (recommended)
 pnpm run process-prd-openai  # OpenAI processing
 pnpm run process-prd         # Basic Anthropic processing
 
